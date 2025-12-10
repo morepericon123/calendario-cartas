@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calendario 11–21 diciembre — Editable y Personalizable</title>
+
+<!-- Tipos de letra base (se cargarán dinámicamente según selección) -->
+<link id="fontLink" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap">
+
+<style>
+  :root{
+    --bg:#0b1220;
+    --card:#1b3940;
+    --text:#f7f7f7;
+    --accent:#f5c542;
+    --card-radius:12px;
+    --card-shadow: 0 6px 14px rgba(0,0,0,.45);
+    --card-padding:18px;
+    --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    --columns:5;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:20px;background:var(--bg);color:var(--text);
+    font-family:var(--font-family);transition:background .25s,color .25s;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  }
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1100px;margin:0 auto 14px}
+  h1{margin:0;font-size:20px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button, select, input[type="color"]{cursor:pointer}
+  .btn{background:var(--text);color:var(--bg);border:none;padding:8px 12px;border-radius:8px}
+  .btn.secondary{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.12)}
+  .grid{display:grid;grid-template-columns:repeat(var(--columns),1fr);gap:12px;max-width:1100px;margin:0 auto}
+  .day{
+    background:linear-gradient(135deg, var(--card), rgba(0,0,0,0.04));
+    padding:var(--card-padding);border-radius:var(--card-radius);
+    min-height:90px;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    box-shadow:var(--card-shadow);cursor:pointer;transition:transform .12s, box-shadow .12s;
+  }
+  .day:hover{transform:translateY(-4px)}
+  .num{font-weight:700;font-size:20px;color:var(--accent)}
+  .preview{font-size:13px;margin-top:8px;text-align:center;color:var(--text);opacity:.95;white-space:pre-wrap}
+  .footer{max-width:1100px;margin:12px auto;color:rgba(255,255,255,.6);font-size:13px}
+
+  /* Modal */
+  .modal{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:60}
+  .card-modal{background:#fff;color:#111;border-radius:12px;padding:18px;max-width:760px;width:94%;max-height:90vh;overflow:auto}
+  textarea{width:100%;min-height:220px;padding:10px;border-radius:8px;border:1px solid #ccc;font-size:15px;resize:vertical;font-family:inherit}
+  .row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .meta{font-size:13px;color:#666;margin-top:8px}
+
+  /* Panel lateral */
+  .customBtn{position:fixed;right:18px;top:18px;z-index:80;background:var(--text);color:var(--bg);border:none;padding:10px 12px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.4);cursor:pointer}
+  .sidePanel{position:fixed;right:0;top:0;height:100%;width:360px;background:#fafafa;color:#111;transform:translateX(105%);transition:transform .28s;box-shadow:0 20px 40px rgba(2,6,23,.5);z-index:90;padding:18px;overflow:auto}
+  .sidePanel.open{transform:translateX(0)}
+  .sidePanel h3{margin-top:0}
+  label.field{display:block;margin:10px 0;font-size:13px;color:#333}
+  .small{font-size:13px;color:#555}
+  input[type="range"]{width:100%}
+  .flex{display:flex;gap:8px;align-items:center}
+  .imgPreview{width:100%;height:140px;border-radius:8px;object-fit:cover;background:#eee;margin-top:8px}
+  .divider{height:1px;background:rgba(0,0,0,.08);margin:12px 0}
+
+  /* responsive */
+  @media(max-width:900px){
+    :root{--columns:2}
+    .sidePanel{width:94%}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;gap:12px;align-items:center">
+    <h1>Calendario — 11 a 21 de diciembre</h1>
+    <div class="small">Haz clic en un día para leer o editar. Usa "Modo editar" para cambiar textos.</div>
+  </div>
+
+  <div class="controls">
+    <button id="toggleEdit" class="btn secondary">Modo editar</button>
+    <button id="exportContent" class="btn">Exportar cartas</button>
+    <label style="display:inline-block">
+      <button id="importContentBtn" class="btn secondary">Importar cartas</button>
+      <input id="importContent" type="file" accept=".json" style="display:none"/>
+    </label>
+    <button id="downloadHtml" class="btn">Descargar HTML</button>
+  </div>
+</header>
+
+<!-- Grid -->
+<main>
+  <div id="grid" class="grid"></div>
+  <div class="footer">Puedes guardar estilos y contenido en tu navegador. Usa el botón "Personalizar" para abrir el panel de diseño.</div>
+</main>
+
+<!-- Modal para ver / editar carta -->
+<div id="modal" class="modal" style="display:none">
+  <div class="card-modal" role="dialog" aria-modal="true">
+    <h2 id="modalTitle">Día</h2>
+    <div id="viewArea"></div>
+
+    <div id="editArea" style="display:none">
+      <label class="small">Editar texto:</label>
+      <textarea id="editText"></textarea>
+      <div class="row">
+        <button id="saveEdit" class="btn">Guardar</button>
+        <button id="cancelEdit" class="btn secondary">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="meta" id="metaInfo"></div>
+    <div style="margin-top:12px">
+      <button id="closeModal" class="btn secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Botón Personalizar -->
+<button id="openPanel" class="customBtn" title="Personalizar">Personalizar 💡</button>
+
+<!-- Panel lateral -->
+<aside id="panel" class="sidePanel" aria-hidden="true">
+  <h3>Personalización</h3>
+  <div class="small">Cambia apariencia y disposición. Los cambios se guardan localmente.</div>
+
+  <div class="divider"></div>
+
+  <label class="field">Fondo (color):
+    <input id="bgColor" type="color" value="#0b1220"/>
+  </label>
+
+  <label class="field">Fondo — imagen (opcional):
+    <input id="bgImage" type="file" accept="image/*"/>
+    <img id="bgPreview" class="imgPreview" style="display:none"/>
+    <div style="margin-top:6px">
+      <button id="clearBgImage" class="btn secondary">Eliminar imagen</button>
+    </div>
+  </label>
+
+  <label class="field">Color de tarjeta:
+    <input id="cardColor" type="color" value="#1b3940"/>
+  </label>
+
+  <label class="field">Color del texto:
+    <input id="textColor" type="color" value="#f7f7f7"/>
+  </label>
+
+  <label class="field">Color acento (números):
+    <input id="accentColor" type="color" value="#f5c542"/>
+  </label>
+
+  <label class="field">Tipografía:
+    <select id="fontSelect">
+      <option value="Inter">Inter (base)</option>
+      <option value="Roboto">Roboto</option>
+      <option value="Lora">Lora (serif)</option>
+      <option value="Montserrat">Montserrat</option>
+      <option value="Poppins">Poppins</option>
+      <option value="Merriweather">Merriweather</option>
+    </select>
+  </label>
+
+  <label class="field">Columnas:
+    <select id="colsSelect">
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5" selected>5</option>
+    </select>
+  </label>
+
+  <label class="field">Tamaño de tarjeta:
+    <input id="cardSize" type="range" min="12" max="30" value="18"/>
+    <div class="small">Padding: <span id="cardSizeVal">18</span> px</div>
+  </label>
+
+  <label class="field">Radio de borde:
+    <input id="cardRadius" type="range" min="0" max="48" value="12"/>
+    <div class="small">Radius: <span id="cardRadiusVal">12</span> px</div>
+  </label>
+
+  <label class="field">
+    <input id="shadowToggle" type="checkbox" checked/> Sombra en tarjetas
+  </label>
+
+  <div class="divider"></div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button id="saveStyle" class="btn">Guardar estilo</button>
+    <button id="exportStyle" class="btn secondary">Exportar estilo</button>
+    <label style="display:inline-block">
+      <button id="importStyleBtn" class="btn secondary">Importar estilo</button>
+      <input id="importStyle" type="file" accept=".json" style="display:none"/>
+    </label>
+    <button id="resetStyle" class="btn secondary">Restablecer estilo</button>
+  </div>
+
+  <div style="height:14px"></div>
+  <div class="divider"></div>
+
+  <div class="small">Restaurar contenido o descargar copia:</div>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button id="resetContent" class="btn secondary">Restablecer cartas</button>
+    <button id="exportAll" class="btn">Exportar todo (cartas+estilo)</button>
+    <label style="display:inline-block">
+      <button id="importAllBtn" class="btn secondary">Importar todo</button>
+      <input id="importAll" type="file" accept=".json" style="display:none"/>
+    </label>
+  </div>
+
+  <div style="height:30px"></div>
+  <div class="small">Consejo: usa "Exportar cartas" antes de compartir si quieres preservar el texto original.</div>
+</aside>
+
+<script>
+/* ====== Config inicial y utilidades ====== */
+const startDay = 11;
+const endDay = 21; // inclusive
+const days = [];
+for(let d=startDay; d<=endDay; d++) days.push(d);
+
+// Contenido por defecto (uno por día)
+const defaultCalendar = [
+  "Un nuevo día para recordarte que mereces cosas buenas. Bienvenido 11 de diciembre.",
+  "Que este día 12 de diciembre te traiga calma, claridad y una chispa de alegría inesperada.",
+  "13 de diciembre: respira hondo y recuerda que todo avance, por pequeño que sea, cuenta.",
+  "14 de diciembre: encuentra belleza en lo simple y compañía en las pequeñas cosas.",
+  "15 de diciembre: valora lo que has hecho este año. Eres más fuerte de lo que crees.",
+  "16 de diciembre: tómate un instante para ti. Permítete descansar.",
+  "17 de diciembre: celebra tus pasos. Incluso los silenciosos cuentan.",
+  "18 de diciembre: abraza la calma; lo que deba llegar, llegará.",
+  "19 de diciembre: un motivo para sonreír puede aparecer en cualquier momento.",
+  "20 de diciembre: faltan pocos días para cerrar el año. Lo estás haciendo bien.",
+  "21 de diciembre: gracias por llegar hasta aquí. Que hoy te encuentre rodeado de luz."
+];
+
+// Keys de localStorage
+const KEY_CONTENT = 'adviento_calendar_content_v1';
+const KEY_STYLE = 'adviento_calendar_style_v1';
+
+// Estado actual
+let calendar = [];
+let styleState = {};
+
+// Elementos del DOM
+const grid = document.getElementById('grid');
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const viewArea = document.getElementById('viewArea');
+const editArea = document.getElementById('editArea');
+const editText = document.getElementById('editText');
+const saveEdit = document.getElementById('saveEdit');
+const cancelEdit = document.getElementById('cancelEdit');
+const closeModal = document.getElementById('closeModal');
+const toggleEdit = document.getElementById('toggleEdit');
+
+const openPanelBtn = document.getElementById('openPanel');
+const panel = document.getElementById('panel');
+
+const bgColor = document.getElementById('bgColor');
+const bgImage = document.getElementById('bgImage');
+const bgPreview = document.getElementById('bgPreview');
+const clearBgImage = document.getElementById('clearBgImage');
+const cardColor = document.getElementById('cardColor');
+const textColor = document.getElementById('textColor');
+const accentColor = document.getElementById('accentColor');
+const fontSelect = document.getElementById('fontSelect');
+const colsSelect = document.getElementById('colsSelect');
+const cardSize = document.getElementById('cardSize');
+const cardSizeVal = document.getElementById('cardSizeVal');
+const cardRadius = document.getElementById('cardRadius');
+const cardRadiusVal = document.getElementById('cardRadiusVal');
+const shadowToggle = document.getElementById('shadowToggle');
+
+const saveStyle = document.getElementById('saveStyle');
+const exportStyle = document.getElementById('exportStyle');
+const importStyleBtn = document.getElementById('importStyleBtn');
+const importStyle = document.getElementById('importStyle');
+const resetStyle = document.getElementById('resetStyle');
+
+const exportContentBtn = document.getElementById('exportContent');
+const importContentBtn = document.getElementById('importContentBtn');
+const importContent = document.getElementById('importContent');
+const downloadHtml = document.getElementById('downloadHtml');
+const resetContent = document.getElementById('resetContent');
+const exportAll = document.getElementById('exportAll');
+const importAllBtn = document.getElementById('importAllBtn');
+const importAll = document.getElementById('importAll');
+
+/* ====== Cargar / Guardar contenido ====== */
+function loadContent(){
+  const saved = localStorage.getItem(KEY_CONTENT);
+  if(saved){
+    try{
+      const parsed = JSON.parse(saved);
+      if(Array.isArray(parsed) && parsed.length===days.length){ calendar = parsed; return; }
+    }catch(e){}
+  }
+  calendar = defaultCalendar.slice(0, days.length);
+}
+function saveContent(){
+  localStorage.setItem(KEY_CONTENT, JSON.stringify(calendar));
+}
+
+/* ====== Cargar / Guardar estilo ====== */
+const defaultStyle = {
+  bgColor: '#0b1220',
+  bgImageData: null,
+  cardColor: '#1b3940',
+  textColor: '#f7f7f7',
+  accentColor: '#f5c542',
+  font: 'Inter',
+  columns: 5,
+  cardPadding: 18,
+  cardRadius: 12,
+  cardShadow: true
+};
+
+function loadStyle(){
+  const saved = localStorage.getItem(KEY_STYLE);
+  if(saved){
+    try{
+      const parsed = JSON.parse(saved);
+      styleState = Object.assign({}, defaultStyle, parsed);
+      return;
+    }catch(e){}
+  }
+  styleState = Object.assign({}, defaultStyle);
+}
+function saveStyleState(){
+  localStorage.setItem(KEY_STYLE, JSON.stringify(styleState));
+}
+
+/* ====== Aplicar estilos al DOM ====== */
+function applyStyles(){
+  document.documentElement.style.setProperty('--bg', styleState.bgColor);
+  document.documentElement.style.setProperty('--card', styleState.cardColor);
+  document.documentElement.style.setProperty('--text', styleState.textColor);
+  document.documentElement.style.setProperty('--accent', styleState.accentColor);
+  document.documentElement.style.setProperty('--card-radius', styleState.cardRadius + 'px');
+  document.documentElement.style.setProperty('--card-padding', styleState.cardPadding + 'px');
+  document.documentElement.style.setProperty('--card-shadow', styleState.cardShadow ? '0 6px 14px rgba(0,0,0,.45)' : 'none');
+  document.documentElement.style.setProperty('--columns', styleState.columns);
+
+  // background image
+  if(styleState.bgImageData){
+    document.body.style.backgroundImage = url(${styleState.bgImageData});
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+  } else {
+    document.body.style.backgroundImage = 'none';
+  }
+
+  // font loading (Google Fonts)
+  loadFont(styleState.font);
+}
+
+/* Cargar font de Google Fonts añadiendo/reemplazando link#fontLink */
+function loadFont(fontName){
+  const map = {
+    'Inter':'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap',
+    'Roboto':'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
+    'Lora':'https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap',
+    'Montserrat':'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap',
+    'Poppins':'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap',
+    'Merriweather':'https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap'
+  };
+  const href = map[fontName] || map['Inter'];
+  let link = document.getElementById('fontLink');
+  if(!link){
+    link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.id = 'fontLink';
+    document.head.appendChild(link);
+  }
+  link.href = href;
+  const family = fontName;
+  document.documentElement.style.setProperty('--font-family', "${family}", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial);
+}
+
+/* ====== Renderizar la grid con los días ====== */
+function renderGrid(){
+  grid.innerHTML = '';
+  for(let i=0;i<days.length;i++){
+    const d = document.createElement('div');
+    d.className = 'day';
+    d.dataset.index = i;
+
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.textContent = days[i];
+
+    const preview = document.createElement('div');
+    preview.className = 'preview';
+    preview.textContent = (calendar[i]||'').slice(0,140) + ((calendar[i]||'').length>140 ? '…' : '');
+
+    d.appendChild(num);
+    d.appendChild(preview);
+    d.addEventListener('click', ()=> openModal(i));
+    grid.appendChild(d);
+  }
+}
+
+/* ====== Modal (ver / editar) ====== */
+let editMode = false;
+let currentIndex = 0;
+
+function openModal(i){
+  currentIndex = i;
+  modal.style.display = 'flex';
+  modalTitle.textContent = Día ${days[i]};
+  viewArea.style.display = 'block';
+  viewArea.innerHTML = <p style="white-space:pre-wrap">${escapeHtml(calendar[i]||'')}</p>;
+  editArea.style.display = editMode ? 'block' : 'none';
+  editText.value = calendar[i] || '';
+}
+
+closeModal.addEventListener('click', ()=> modal.style.display='none');
+cancelEdit.addEventListener('click', ()=> { editText.value = calendar[currentIndex]; });
+saveEdit.addEventListener('click', ()=>{
+  calendar[currentIndex] = editText.value;
+  saveContent();
+  renderGrid();
+  openModal(currentIndex);
+});
+
+toggleEdit.addEventListener('click', ()=>{
+  editMode = !editMode;
+  toggleEdit.textContent = editMode ? 'Salir de modo editar' : 'Modo editar';
+  if(modal.style.display==='flex'){
+    editArea.style.display = editMode ? 'block' : 'none';
+  }
+});
+
+/* ====== Escape HTML util ====== */
+function escapeHtml(s){
+  if(!s) return '';
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ====== Export / Import contenido ====== */
+exportContentBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(calendar, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calendario-11-21-cartas.json';
+  a.click();
+});
+
+importContent.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(Array.isArray(data) && data.length===days.length){
+        calendar = data;
+        saveContent();
+        renderGrid();
+        alert('Cartas importadas correctamente.');
+      } else alert('El JSON debe ser un array con ' + days.length + ' textos.');
+    }catch(err){ alert('Error al parsear JSON: '+err); }
+  };
+  reader.readAsText(f);
+});
+document.getElementById('importContentBtn').addEventListener('click', ()=> importContent.click());
+
+/* ====== Descargar HTML actual (snapshot) ====== */
+downloadHtml.addEventListener('click', ()=>{
+  const html = '<!doctype html>\n' + document.documentElement.outerHTML;
+  const blob = new Blob([html], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calendario-11-21.html';
+  a.click();
+});
+
+/* ====== Panel Personalización: abrir / cerrar ====== */
+openPanelBtn.addEventListener('click', ()=>{
+  panel.classList.toggle('open');
+});
+
+/* ====== Vincular controles del panel con styleState ====== */
+function reflectStyleToControls(){
+  bgColor.value = styleState.bgColor || defaultStyle.bgColor;
+  if(styleState.bgImageData){
+    bgPreview.src = styleState.bgImageData;
+    bgPreview.style.display = 'block';
+  } else {
+    bgPreview.style.display = 'none';
+  }
+  cardColor.value = styleState.cardColor;
+  textColor.value = styleState.textColor;
+  accentColor.value = styleState.accentColor;
+  fontSelect.value = styleState.font || defaultStyle.font;
+  colsSelect.value = styleState.columns || defaultStyle.columns;
+  cardSize.value = styleState.cardPadding || defaultStyle.cardPadding;
+  cardSizeVal.textContent = styleState.cardPadding;
+  cardRadius.value = styleState.cardRadius || defaultStyle.cardRadius;
+  cardRadiusVal.textContent = styleState.cardRadius;
+  shadowToggle.checked = !!styleState.cardShadow;
+}
+
+bgColor.addEventListener('input', ()=> { styleState.bgColor = bgColor.value; applyStyles(); saveStyleState(); });
+cardColor.addEventListener('input', ()=> { styleState.cardColor = cardColor.value; applyStyles(); saveStyleState(); });
+textColor.addEventListener('input', ()=> { styleState.textColor = textColor.value; applyStyles(); saveStyleState(); });
+accentColor.addEventListener('input', ()=> { styleState.accentColor = accentColor.value; applyStyles(); saveStyleState(); });
+
+fontSelect.addEventListener('change', ()=> { styleState.font = fontSelect.value; applyStyles(); saveStyleState(); });
+
+colsSelect.addEventListener('change', ()=> { styleState.columns = parseInt(colsSelect.value,10); applyStyles(); saveStyleState(); });
+
+cardSize.addEventListener('input', ()=> { styleState.cardPadding = parseInt(cardSize.value,10); cardSizeVal.textContent = styleState.cardPadding; applyStyles(); saveStyleState(); });
+cardRadius.addEventListener('input', ()=> { styleState.cardRadius = parseInt(cardRadius.value,10); cardRadiusVal.textContent = styleState.cardRadius; applyStyles(); saveStyleState(); });
+
+shadowToggle.addEventListener('change', ()=> { styleState.cardShadow = shadowToggle.checked; applyStyles(); saveStyleState(); });
+
+/* ====== Fondo imagen upload / clear ====== */
+bgImage.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=> {
+    styleState.bgImageData = reader.result;
+    bgPreview.src = reader.result;
+    bgPreview.style.display = 'block';
+    applyStyles();
+    saveStyleState();
+  };
+  reader.readAsDataURL(f);
+});
+
+clearBgImage.addEventListener('click', ()=> {
+  styleState.bgImageData = null;
+  bgImage.value = '';
+  bgPreview.src = '';
+  bgPreview.style.display = 'none';
+  applyStyles();
+  saveStyleState();
+});
+
+/* ====== Guardar / Exportar / Importar estilo ====== */
+saveStyle.addEventListener('click', ()=> {
+  saveStyleState();
+  alert('Estilo guardado localmente.');
+});
+
+exportStyle.addEventListener('click', ()=> {
+  const blob = new Blob([JSON.stringify(styleState, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'adviento-estilo.json';
+  a.click();
+});
+
+importStyle.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=> {
+    try{
+      const data = JSON.parse(reader.result);
+      styleState = Object.assign({}, defaultStyle, data);
+      saveStyleState();
+      reflectStyleToControls();
+      applyStyles();
+      alert('Estilo importado.');
+    }catch(err){ alert('Error al importar estilo: '+err); }
+  };
+  reader.readAsText(f);
+});
+importStyleBtn.addEventListener('click', ()=> importStyle.click());
+
+resetStyle.addEventListener('click', ()=>{
+  if(!confirm('Restablecer estilo por defecto?')) return;
+  styleState = Object.assign({}, defaultStyle);
+  saveStyleState();
+  reflectStyleToControls();
+  applyStyles();
+});
+
+/* ====== Export / Import todo (cartas + estilo) ====== */
+exportAll.addEventListener('click', ()=>{
+  const all = {calendar, styleState};
+  const blob = new Blob([JSON.stringify(all, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'adviento-completo.json';
+  a.click();
+});
+
+importAll.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(data.calendar && Array.isArray(data.calendar) && data.calendar.length===days.length){
+        calendar = data.calendar;
+        saveContent();
+      } else { alert('El JSON debe contener "calendar" con ' + days.length + ' items.'); return; }
+      if(data.styleState){
+        styleState = Object.assign({}, defaultStyle, data.styleState);
+        saveStyleState();
+      }
+      reflectStyleToControls();
+      applyStyles();
+      renderGrid();
+      alert('Importación completa realizada.');
+    }catch(err){ alert('Error al importar: '+err); }
+  };
+  reader.readAsText(f);
+});
+importAllBtn.addEventListener('click', ()=> importAll.click());
+
+/* ====== Reset contenido ====== */
+resetContent.addEventListener('click', ()=>{
+  if(!confirm('Restablecer el contenido original de las cartas? Esto sobrescribirá tu texto.')) return;
+  calendar = defaultCalendar.slice(0, days.length);
+  saveContent();
+  renderGrid();
+  alert('Contenido restablecido.');
+});
+
+/* ====== Reset completo de localStorage (opcional) ====== */
+/* función oculta si la necesitas: */
+function clearAllLocal(){
+  localStorage.removeItem(KEY_CONTENT);
+  localStorage.removeItem(KEY_STYLE);
+}
+
+/* ====== Init ====== */
+function init(){
+  loadContent();
+  loadStyle();
+  reflectStyleToControls();
+  applyStyles();
+  renderGrid();
+
+  // mostrar valores en controles
+  cardSizeVal.textContent = styleState.cardPadding;
+  cardRadiusVal.textContent = styleState.cardRadius;
+}
+init();
+
+/* ====== Guardar cambios automáticamente al cerrar modal ====== */
+window.addEventListener('beforeunload', ()=>{
+  saveContent();
+  saveStyleState();
+});
+
+/* ====== Guardar cuando cambie el textarea (opcional autoguardado) ====== */
+let autoSaveTimer = null;
+editText.addEventListener('input', ()=>{
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(()=> {
+    calendar[currentIndex] = editText.value;
+    saveContent();
+    renderGrid();
+  }, 700);
+});
+
+</script>
+</body>
+</html>
